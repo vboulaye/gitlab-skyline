@@ -22,9 +22,11 @@ async def get_contributions(semaphore, domain, username, date, contribution_matr
         try:
             date_as_str = date.strftime("%Y-%m-%d")
             url = domain + '/users/' + username + '/calendar_activities?date=' + date_as_str
+            print(f"url: {url}")
             async with semaphore, client.get(url) as response:
                 content = await response.text()
                 soup = BeautifulSoup(content, 'html.parser')
+                print(f"datej: {date.strftime('%j')} dateu: {date.strftime('%u')} soup: {(soup.find_all('li'))}")
                 contribution_matrix.append(
                     [int(date.strftime('%j')), int(date.strftime('%u')) - 1, len(soup.find_all('li'))])
 
@@ -103,15 +105,15 @@ def generate_skyline_stl(username, year, contribution_matrix):
         )
     )
 
-    logo_gitlab_scad = rotate([face_angle, 0, 0])(
-        translate([base_length / 8, base_height / 2 - base_top_offset / 2 - 2, -1])(
-            linear_extrude(height=2)(
-                scale([0.09, 0.09, 0.09])(
-                    import_stl("gitlab.svg")
-                )
-            )
-        )
-    )
+    # logo_gitlab_scad = rotate([face_angle, 0, 0])(
+    #     translate([base_length / 8, base_height / 2 - base_top_offset / 2 - 2, -1])(
+    #         linear_extrude(height=2)(
+    #             scale([0.09, 0.09, 0.09])(
+    #                 import_stl("gitlab.svg")
+    #             )
+    #         )
+    #     )
+    # )
 
     bars = None
 
@@ -136,7 +138,8 @@ def generate_skyline_stl(username, year, contribution_matrix):
             bars += bar
 
     scad_contributions_filename = 'gitlab_' + username + '_' + str(year)
-    scad_skyline_object = base_scad - logo_gitlab_scad + user_scad + year_scad
+    #scad_skyline_object = base_scad - logo_gitlab_scad + user_scad + year_scad
+    scad_skyline_object = base_scad + user_scad + year_scad
 
     if bars is not None:
         scad_skyline_object += bars
@@ -156,6 +159,7 @@ def main():
                                      epilog='Enjoy!')
     parser.add_argument('--domain', metavar=None, type=str, nargs="?", help='GitlabEE/CE custom domain',
                         default='https://gitlab.com')
+    parser.add_argument('--gitlog', metavar=None, type=str, nargs="?", help='git log extraction file')
     parser.add_argument('username', metavar=None, type=str, help='Gitlab username (without @)')
     parser.add_argument('year', metavar=None, type=int,
                         help='Year of contributions to fetch', default=2020, nargs="?")
@@ -163,24 +167,71 @@ def main():
     parser.add_argument('--max_requests', metavar=None, type=int,
                         help='Max. simultaneous requests to Gitlab. Don\'t mess with their server!', default=10,
                         nargs="?")
+    parser.add_argument('--max_height', metavar=None, type=int,
+                        help='Max height of the buildings', default=0,
+                        nargs="?")
+
+    parser.add_argument('--applyLog', metavar=None, type=bool,
+                        help='apply a log function to the commit number', default=False,
+                        nargs="?")
 
     args = parser.parse_args()
 
     domain = args.domain
+    gitlog = args.gitlog
     username = args.username
     max_requests = args.max_requests
+    max_height = args.max_height
+    applyLog = args.applyLog
     year = args.year
     contribution_matrix = []
 
     print("Fetching contributions from Gitlab...")
 
-    semaphore = asyncio.Semaphore(max_requests)
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(
-        asyncio.wait(
-            [get_contributions(semaphore, domain, username, date, contribution_matrix) for date in
-             all_dates_in_year(year)]))
-    loop.close()
+
+
+    if gitlog:
+        print("reading input file...")
+        contributionsPerDay = {}
+        file = open(gitlog, "r")
+        for line in file:
+            array = line.split()
+            datePart = array[0]
+            commits = int(array[1])
+            contributionsPerDay[datePart] = commits
+
+        if applyLog:
+            print("applying math.log...")
+            for d in contributionsPerDay.keys():
+                contributionsPerDay[d] = math.log(contributionsPerDay[d])
+
+        if max_height>0:
+            print("normalizing...")
+            maxCommits = 0
+            for d in contributionsPerDay.keys():
+                commits = contributionsPerDay[d]
+                if maxCommits < commits:
+                    maxCommits = commits
+
+            for d in contributionsPerDay.keys():
+                contributionsPerDay[d] = int(33 * contributionsPerDay[d] / maxCommits)
+        print("generating contributions...")
+        for date in all_dates_in_year(year):
+            date_as_str = date.strftime("%Y-%m-%d")
+            try:
+                contribution = contributionsPerDay[date_as_str]
+            except KeyError:
+                contribution = 0
+            contribution_matrix.append(
+                [int(date.strftime('%j')), int(date.strftime('%u')) - 1, contribution])
+    else:
+        semaphore = asyncio.Semaphore(max_requests)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(
+            asyncio.wait(
+                [get_contributions(semaphore, domain, username, date, contribution_matrix) for date in
+                 all_dates_in_year(year)]))
+        loop.close()
 
     print("Generating STL...")
     generate_skyline_stl(username, year, contribution_matrix)

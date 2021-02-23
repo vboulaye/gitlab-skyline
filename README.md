@@ -1,3 +1,36 @@
+This is a fork of the gitlab-skyline project to allow generating a skyline from a git repo (my gitlab instance does not give me access to the contribution api)
+
+To get the "contributions" file, use one of ` git log` scripts inside a repo:
+
+either get the commits count:
+```
+GIT_DIR=/path/to/git/repo/.git ./git-changed-count.sh "author" year >repo.log
+```
+
+or the number of changed lines:
+```
+GIT_DIR=/path/to/git/repo/.git ./git-changed-count.sh "author" year >repo.log
+```
+
+then run the generation script with the --gitlog parameter set to the repo log file:
+
+```
+./gitlab-skyline vbo 2020 --gitlog repo.log -
+```
+
+![git_vbo_2020.png](images/sample_repo_file.png)
+
+You can also use additional flags to make the file "prettier".
+- --max_height defines a max height for the talles buildings
+- --applyLog apply a logarithm function to the counter
+
+```
+./gitlab-skyline vbo 2020 --gitlog repo.log --max_height 40 --applyLog true
+```
+
+![model generated from a commmit count + log() + normalized to 40](images/sample_repo_file_normalized.png)
+
+
 # Your Gitlab's contributions in a 3D Skyline
 
 `gitlab-skyline` is a Python command to generate a skyline figure from Gitlab contributions as Github did at https://skyline.github.com/
