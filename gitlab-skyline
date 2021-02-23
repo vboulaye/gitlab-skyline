@@ -219,7 +219,7 @@ def main():
         for date in all_dates_in_year(year):
             date_as_str = date.strftime("%Y-%m-%d")
             try:
-                contribution = contributionsPerDay[date_as_str]
+                contribution = int(contributionsPerDay[date_as_str])
             except KeyError:
                 contribution = 0
             contribution_matrix.append(

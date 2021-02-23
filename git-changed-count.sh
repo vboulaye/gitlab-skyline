@@ -2,7 +2,13 @@
 
 AUTHOR=$1
 YEAR=$2
+#set -x
 
-git log --date=short --format='%cd' --author="$AUTHOR" \
-  --shortstat --before=$(($YEAR+1))-01-01 --after=$YEAR-01-01 | \
-  awk '/[0-9]{4}-[0-9]{2}-[0-9]{2}/ {date=$1;next;} /^$/ {next;} {print date , ($4 +$6)}' | sort
+if [ ! "$3" = "" ]
+then
+   cd "$3"
+fi
+
+git log --date=short --format='%ad' --author="$AUTHOR" \
+  --shortstat --use-mailmap |  \
+  awk '/[0-9]{4}-[0-9]{2}-[0-9]{2}/ {date=$1;next;} /^$/ {next;} {print date , ($4 +$6)}' | grep -e "^$YEAR" | sort
